@@ -74,6 +74,7 @@ fi
 source env/bin/activate
 
 # 3. Устанавливаем зависимости проекта (если не установлены)
+cd "$LTX_DIR"
 if ! pip show ltx-video > /dev/null 2>&1; then
     echo "📦 Устанавливаем зависимости LTX-Video..."
     python -m pip install --upgrade pip
