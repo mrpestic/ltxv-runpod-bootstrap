@@ -32,17 +32,35 @@ git clone --depth 1 --branch "$LTX_BRANCH" "$LTX_REPO_URL" "$LTX_DIR"
 echo "[LTX] Готово: $LTX_DIR"
 
 ### ── 2) Накладываем мои файлы поверх ───────────────────────────────────────
+# Всегда берём путь к папке, где лежит сам startup.sh
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MY_OVERLAY="$SCRIPT_DIR/overlay"
 
-if [ -d "$MY_OVERLAY" ]; then
-    echo "[Overlay] Копирую мои файлы из $MY_OVERLAY -> $LTX_DIR"
-    rsync -a --exclude '.git' "$MY_OVERLAY"/ "$LTX_DIR"/
-else
-    echo "[Overlay] ВНИМАНИЕ: папка overlay не найдена рядом со startup.sh"
+echo "[Overlay] SCRIPT_DIR=$SCRIPT_DIR"
+echo "[Overlay] Ожидаю появление папки: $MY_OVERLAY"
+
+# Иногда repo ещё докачивается — подождём до 60с
+for i in $(seq 1 30); do
+  if [ -d "$MY_OVERLAY" ]; then
+    echo "[Overlay] Найдена overlay (через $((i*2))с)"
+    break
+  fi
+  echo "[Overlay] overlay ещё нет, пробую снова... ($i/30)"
+  sleep 2
+done
+
+# Убедимся, что rsync есть
+if ! command -v rsync >/dev/null 2>&1; then
+  echo "[Overlay] Устанавливаю rsync..."
+  apt-get update -y && apt-get install -y rsync
 fi
 
-cd "$LTX_DIR"
+if [ -d "$MY_OVERLAY" ]; then
+  echo "[Overlay] Копирую файлы из $MY_OVERLAY -> $LTX_DIR"
+  rsync -a --exclude '.git' "$MY_OVERLAY"/ "$LTX_DIR"/
+else
+  echo "[Overlay] ВНИМАНИЕ: overlay так и не появилась, пропускаю копирование"
+fi
 
 # 2. Создаём и активируем виртуальное окружение
 if [ ! -d "env" ]; then
