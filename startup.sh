@@ -120,8 +120,13 @@ else
 fi
 
 # 5. Авторизация Hugging Face (однократно сохраняется в /root/.cache/huggingface)
-echo "🔐 Логинимся в Hugging Face..."
-huggingface-cli login --token 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
+echo "🔐 Проверяю токен Hugging Face..."
+if [ -n "${HF_TOKEN:-}" ]; then
+  echo "🔐 HF: логинюсь по HF_TOKEN..."
+  huggingface-cli login --token "$HF_TOKEN" || echo "⚠️ HF: токен невалиден, продолжаю без логина"
+else
+  echo "ℹ️ HF: токен не задан, пропускаю логин"
+fi
 
 if ! (pip show fastapi > /dev/null 2>&1 && pip show celery > /dev/null 2>&1 && pip show redis > /dev/null 2>&1); then
     echo "📦 Устанавливаем зависимости для API, Celery и фронтенда..."
