@@ -45,19 +45,20 @@ def init():
     # Переходим в директорию проекта LTX-Video
     os.chdir(LTX_DIR)
 
-    # Импортируем функции демона после подготовки пути
-    from inference_daemon_official import load_models_once, global_pipeline as gp, global_pipeline_config as gpc, create_ready_flag
+    # Импортируем модуль демона и загружаем модели
+    import importlib
+    daemon = importlib.import_module('inference_daemon_official')
 
-    ok = load_models_once()
+    ok = daemon.load_models_once()
     if not ok:
         raise RuntimeError("Не удалось загрузить модели в init()")
 
     # Ставит флаг готовности (используется и в оригинальном стартапе)
-    create_ready_flag()
+    daemon.create_ready_flag()
 
     # Прокинем глобальные ссылки
-    global_pipeline = gp
-    global_pipeline_config = gpc
+    global_pipeline = daemon.global_pipeline
+    global_pipeline_config = daemon.global_pipeline_config
 
 
 def _decode_image_to_file(image_base64: str) -> str:
@@ -90,6 +91,11 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
         return {"status": "ERROR", "error": "payload.input is missing"}
 
     data = event["input"] or {}
+
+    # Если по какой-то причине init не выполнился (или глобали пустые) — инициализируем тут
+    global global_pipeline, global_pipeline_config
+    if global_pipeline is None or global_pipeline_config is None:
+        init()
 
     prompt = data.get("prompt")
     if not prompt:
@@ -150,10 +156,23 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
     if not result_paths:
         return {"status": "ERROR", "error": "no output produced"}
 
-    # Возвращаем первый полученный ролик (список может быть >1 при батче)
+    # Пытаемся загрузить файл в хранилище RunPod и вернуть публичный URL
+    result_url = None
+    try:
+        from runpod.serverless.utils import rp_upload
+        upload_result = rp_upload.upload_file_to_bucket(result_paths[0])
+        if isinstance(upload_result, str):
+            result_url = upload_result
+        elif isinstance(upload_result, dict):
+            result_url = upload_result.get("url") or upload_result.get("file_url")
+    except Exception:
+        result_url = None
+
+    # Возвращаем путь и, если получилось, URL
     return {
         "status": "SUCCESS",
-        "result": result_paths[0],
+        "result_path": result_paths[0],
+        "result_url": result_url,
         "all_results": result_paths,
     }
 
