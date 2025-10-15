@@ -50,6 +50,10 @@ ENV HF_HOME=/workspace/.cache/huggingface \
 
 RUN mkdir -p $HF_HOME
 
+# Загружаем веса модели на этапе сборки образа (для быстрого cold start)
+RUN cd /workspace/LTX-Video && \
+    /workspace/LTX-Video/env/bin/python download_weights.py
+
 # Копируем handler для RunPod Serverless (в корень проекта)
 COPY rp_handler.py /workspace/rp_handler.py
 
