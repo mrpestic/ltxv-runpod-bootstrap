@@ -3,37 +3,31 @@
 
 ## Serverless на RunPod
 
-Поддержан серверлес-режим с единоразовой загрузкой демона и обработкой задач через `rp_handler.py`.
+Поддержан серверлес-режим с единоразовой загрузкой демона и обработкой задач через `rp_handler.py`. Веса модели запечены в образ для мгновенного cold start.
 
-### Сборка образа локально (опционально)
+### Автосборка образа в Docker Hub (рекомендуется)
 
-```bash
-docker build -t ghcr.io/<OWNER>/ltxv-runpod-serverless:latest .
-# Если хотите запушить вручную в GHCR:
-echo $GITHUB_TOKEN | docker login ghcr.io -u <OWNER> --password-stdin
-docker push ghcr.io/<OWNER>/ltxv-runpod-serverless:latest
-```
+1. Добавьте секреты в GitHub репозиторий (Settings → Secrets → Actions):
+   - `DOCKERHUB_USERNAME` — ваш логин Docker Hub
+   - `DOCKERHUB_TOKEN` — Access Token (создать в Docker Hub → Account Settings → Security)
 
-Переменные окружения в контейнере (рекомендуется):
+2. При пуше в ветку `runpod-serverless` или `main` GitHub Actions автоматически:
+   - Соберёт образ с весами (~30GB, займёт ~20 мин)
+   - Запушит в `DOCKERHUB_USERNAME/ltxv-runpod:latest`
 
-- `HF_TOKEN` — токен Hugging Face (опционально, для приватных моделей/ускоренного скачивания)
-- `HF_HOME`, `HUGGINGFACE_HUB_CACHE`, `TRANSFORMERS_CACHE`, `DIFFUSERS_CACHE` — кэш (по умолчанию настроены на `/workspace/.cache/huggingface`)
+3. В RunPod используйте готовый образ из Docker Hub
 
 ### Деплой Serverless
 
-1. В RunPod -> Serverless -> Create Endpoint
-2. Укажите образ `your-dockerhub/ltxv-runpod-serverless:latest`
-3. Entrypoint/Command: по умолчанию контейнер запускает `python /workspace/rp_handler.py`
-4. Warm Pool (рекомендуется): `1-2` для снижения холодного старта
-5. GPU: выберите GPU с достаточной VRAM (например, A100/H100)
-
-Альтернатива: автосборка образа в GHCR (рекомендуется)
-
-1) Включите GitHub Actions. Workflow `.github/workflows/docker-publish.yml` публикует образ в `ghcr.io/<OWNER>/ltxv-runpod-serverless:latest` с использованием `GITHUB_TOKEN`.
-
-2) Убедитесь, что GitHub Packages (GHCR) настроен на публичную видимость для этого образа, чтобы RunPod мог его притянуть.
-
-3) Создать endpoint можно через UI или API RunPod. Пример JSON — `runpod_endpoint_example.json`.
+1. RunPod → Serverless → Create Endpoint
+2. Container Image: `DOCKERHUB_USERNAME/ltxv-runpod:latest`
+3. Container Disk: 10–20 GB (веса уже в образе)
+4. GPU: A100/H100
+5. ENV:
+   - `RUN_MODE=serverless`
+   - `HF_TOKEN=<опционально>`
+6. Warm Pool: 1–2
+7. Idle Timeout: 300–600
 
 ### Формат запроса
 
@@ -58,7 +52,8 @@ docker push ghcr.io/<OWNER>/ltxv-runpod-serverless:latest
 ```json
 {
   "status": "SUCCESS",
-  "result": "outputs/2025-01-01/video_output_xxx.mp4",
+  "result_path": "outputs/2025-01-01/video_output_xxx.mp4",
+  "result_url": "https://...",
   "all_results": ["..."]
 }
 ```
@@ -66,6 +61,7 @@ docker push ghcr.io/<OWNER>/ltxv-runpod-serverless:latest
 ## Примечания
 
 - Демон инициализируется один раз при холодном старте через `init()` в `rp_handler.py`, модели держатся в GPU памяти.
+- Веса модели (~30GB) запечены в Docker-образ — cold start займёт ~30–60 сек вместо 8 минут.
 - Поддержаны text-to-video и image-to-video (`image_base64`, JPEG/PNG в base64).
 - Папки `outputs/` и кэши находятся в `/workspace` внутри контейнера.
 
@@ -76,7 +72,7 @@ docker push ghcr.io/<OWNER>/ltxv-runpod-serverless:latest
 ### Запуск Pod
 
 1. В RunPod -> Pods -> Create Pod
-2. Укажите образ `your-dockerhub/ltxv-runpod-serverless:latest`
+2. Укажите образ `DOCKERHUB_USERNAME/ltxv-runpod:latest`
 3. В переменных окружения задайте:
    - `RUN_MODE=pod`
    - (опционально) `HF_TOKEN=<ваш токен>`
