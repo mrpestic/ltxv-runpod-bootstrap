@@ -45,6 +45,33 @@ def init():
     # Переходим в директорию проекта LTX-Video
     os.chdir(LTX_DIR)
 
+    # 1) Проверка и загрузка весов модели (как в startup.sh)
+    ckpt_candidates = [
+        os.path.join(LTX_DIR, "models", "ltxv-13b-0.9.8-distilled.safetensors"),
+        os.path.join(LTX_DIR, "models", "ltxv-13b-0.9.8-distilled", "model.safetensors"),
+    ]
+    if not any(os.path.exists(p) for p in ckpt_candidates):
+        # Мягкий логин в HF, если есть токен
+        try:
+            hf_token = os.environ.get("HF_TOKEN")
+            if hf_token:
+                import subprocess as sp
+                sp.run([os.path.join(LTX_DIR, "env", "bin", "huggingface-cli"), "login", "--token", hf_token],
+                       check=False, cwd=LTX_DIR)
+        except Exception:
+            pass
+
+        # Скачиваем веса
+        try:
+            import subprocess as sp
+            sp.run([os.path.join(LTX_DIR, "env", "bin", "python"), "download_weights.py"],
+                   check=True, cwd=LTX_DIR)
+        except Exception as e:
+            raise RuntimeError(f"Не удалось загрузить веса модели: {e}")
+
+        if not any(os.path.exists(p) for p in ckpt_candidates):
+            raise RuntimeError("Веса модели не найдены после загрузки")
+
     # Импортируем модуль демона и загружаем модели
     import importlib
     daemon = importlib.import_module('inference_daemon_official')
