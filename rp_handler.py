@@ -176,11 +176,22 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
     except Exception:
         result_url = None
 
-    # Возвращаем путь и, если получилось, URL
+    # Если S3 не настроен, возвращаем видео как base64
+    video_base64 = None
+    if result_url is None:
+        try:
+            with open(result_paths[0], 'rb') as f:
+                video_bytes = f.read()
+                video_base64 = base64.b64encode(video_bytes).decode('utf-8')
+        except Exception as e:
+            pass  # Если не получилось, просто вернем null
+
+    # Возвращаем путь, URL (если есть) и base64 (если нет URL)
     return {
         "status": "SUCCESS",
         "result_path": result_paths[0],
         "result_url": result_url,
+        "video_base64": video_base64,
         "all_results": result_paths,
     }
 

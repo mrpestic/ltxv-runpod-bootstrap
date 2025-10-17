@@ -27,11 +27,6 @@ ENV LTX_REPO_URL=$LTX_REPO_URL \
 
 RUN git clone --depth 1 --branch "$LTX_BRANCH" "$LTX_REPO_URL" /workspace/LTX-Video
 
-# Копируем overlay внутрь LTX-Video
-COPY overlay/ /workspace/LTX-Video/
-COPY startup.sh /workspace/startup.sh
-COPY entrypoint.sh /workspace/entrypoint.sh
-
 # Создаем venv и ставим зависимости
 RUN python3 -m venv /workspace/LTX-Video/env && \
     . /workspace/LTX-Video/env/bin/activate && \
@@ -54,11 +49,16 @@ RUN mkdir -p $HF_HOME
 RUN cd /workspace/LTX-Video && \
     /workspace/LTX-Video/env/bin/python download_weights.py
 
-# Копируем handler для RunPod Serverless (в корень проекта)
+# Копируем overlay внутрь LTX-Video (в конце, чтобы не инвалидировать кеш для весов)
+COPY overlay/ /workspace/LTX-Video/
+COPY startup.sh /workspace/startup.sh
+COPY entrypoint.sh /workspace/entrypoint.sh
+
+# Копируем handler для RunPod Serverless (в самом конце)
 COPY rp_handler.py /workspace/rp_handler.py
 
 # По умолчанию RunPod Serverless использует python handler
-ENV PYTHONPATH=/workspace/LTX-Video:$PYTHONPATH
+ENV PYTHONPATH=/workspace/LTX-Video
 
 # Порты API/Frontend для Pod режима
 EXPOSE 8000 8002
