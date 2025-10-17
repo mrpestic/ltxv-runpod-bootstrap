@@ -38,35 +38,67 @@ global_pipeline_config = None
 def init():
     """Инициализация контейнера (cold start): загружаем модели один раз."""
     global global_pipeline, global_pipeline_config
+    
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
 
     _ensure_env()
     _prepare_imports()
 
     # Переходим в директорию проекта LTX-Video
     os.chdir(LTX_DIR)
+    logger.info(f"🔧 Рабочая директория: {os.getcwd()}")
 
     # Веса уже запечены в образ на этапе сборки Docker, проверяем их наличие
     ckpt_candidates = [
         os.path.join(LTX_DIR, "models", "ltxv-13b-0.9.8-distilled.safetensors"),
         os.path.join(LTX_DIR, "models", "ltxv-13b-0.9.8-distilled", "model.safetensors"),
     ]
+    
+    logger.info(f"🔍 Проверяем наличие весов...")
+    for candidate in ckpt_candidates:
+        logger.info(f"  - {candidate}: {'✅ найден' if os.path.exists(candidate) else '❌ не найден'}")
+    
     if not any(os.path.exists(p) for p in ckpt_candidates):
-        raise RuntimeError("Веса модели не найдены в образе! Проверьте сборку Docker.")
+        raise RuntimeError(f"Веса модели не найдены! Проверьте: {ckpt_candidates}")
+
+    # Проверяем наличие конфига
+    config_path = os.path.join(LTX_DIR, "ltxv-13b-0.9.8-distilled.yaml")
+    if not os.path.exists(config_path):
+        raise RuntimeError(f"Конфиг не найден: {config_path}")
+    logger.info(f"✅ Конфиг найден: {config_path}")
 
     # Импортируем модуль демона и загружаем модели
     import importlib
-    daemon = importlib.import_module('inference_daemon_official')
+    try:
+        daemon = importlib.import_module('inference_daemon_official')
+        logger.info("✅ Модуль inference_daemon_official импортирован")
+    except Exception as e:
+        raise RuntimeError(f"Ошибка импорта inference_daemon_official: {e}")
 
-    ok = daemon.load_models_once()
-    if not ok:
-        raise RuntimeError("Не удалось загрузить модели в init()")
+    logger.info("🎬 Загружаем модели...")
+    try:
+        ok = daemon.load_models_once()
+        if not ok:
+            raise RuntimeError("load_models_once() вернул False - проверьте логи выше")
+    except Exception as e:
+        raise RuntimeError(f"Ошибка при загрузке моделей: {e}")
 
     # Ставит флаг готовности (используется и в оригинальном стартапе)
     daemon.create_ready_flag()
+    logger.info("✅ Флаг готовности создан")
 
     # Прокинем глобальные ссылки
     global_pipeline = daemon.global_pipeline
     global_pipeline_config = daemon.global_pipeline_config
+    
+    if global_pipeline is None:
+        raise RuntimeError("global_pipeline is None после load_models_once()")
+    if global_pipeline_config is None:
+        raise RuntimeError("global_pipeline_config is None после load_models_once()")
+    
+    logger.info("✅ Инициализация завершена успешно")
 
 
 def _decode_image_to_file(image_base64: str) -> str:

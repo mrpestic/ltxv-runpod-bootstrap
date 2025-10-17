@@ -5,32 +5,35 @@ set -euo pipefail
 # Использует Docker кеш для всех тяжелых слоёв
 
 DOCKER_IMAGE="${DOCKER_IMAGE:-koder007/ltxv-runpod}"
-TAG="${TAG:-latest}"
+TAG="${TAG:-v0.9.7}"
 
-echo "🚀 Быстрый билд с кешированием..."
+echo "🚀 Быстрый билд с кешированием для AMD64..."
 echo "   Образ: $DOCKER_IMAGE:$TAG"
 echo ""
 
-# BuildKit для лучшего кеширования
-export DOCKER_BUILDKIT=1
+# Создаем buildx builder если нужно
+if ! docker buildx ls | grep -q multiarch; then
+  echo "📦 Создаем multi-platform builder..."
+  docker buildx create --name multiarch --driver docker-container --use
+fi
 
-# Билд с кешем (только последние слои пересоберутся)
-docker build \
-  --progress=plain \
+# Используем multiarch builder
+docker buildx use multiarch
+
+# Билд для AMD64 с кешем и сразу push
+# Используем tty для интерактивного прогресса (показывает детали каждого слоя)
+docker buildx build \
+  --platform linux/amd64 \
+  --progress=tty \
   -t "$DOCKER_IMAGE:$TAG" \
+  --push \
   .
 
 echo ""
-echo "✅ Билд завершен!"
+echo "✅ Билд и пуш завершены!"
+echo "🎉 Образ $DOCKER_IMAGE:$TAG готов на Docker Hub (AMD64)"
 echo ""
-read -p "📤 Запушить образ в Docker Hub? (y/N): " -n 1 -r
-echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-  echo "📤 Пушим образ..."
-  docker push "$DOCKER_IMAGE:$TAG"
-  echo "✅ Готово! Образ $DOCKER_IMAGE:$TAG обновлен"
-else
-  echo "ℹ️ Пуш пропущен. Для ручного пуша:"
-  echo "   docker push $DOCKER_IMAGE:$TAG"
-fi
+echo "🚀 Для использования на RunPod:"
+echo "   Образ: $DOCKER_IMAGE:$TAG"
+echo "   Платформа: linux/amd64"
 

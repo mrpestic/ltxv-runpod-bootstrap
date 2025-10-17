@@ -45,6 +45,10 @@ ENV HF_HOME=/workspace/.cache/huggingface \
 
 RUN mkdir -p $HF_HOME
 
+# Копируем скрипт загрузки весов (нужен для следующего шага)
+COPY overlay/download_weights.py /workspace/LTX-Video/download_weights.py
+COPY overlay/ltxv-13b-0.9.8-distilled.yaml /workspace/LTX-Video/ltxv-13b-0.9.8-distilled.yaml
+
 # Загружаем веса модели на этапе сборки образа (для быстрого cold start)
 RUN cd /workspace/LTX-Video && \
     /workspace/LTX-Video/env/bin/python download_weights.py
