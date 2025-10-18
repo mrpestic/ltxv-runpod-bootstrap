@@ -42,6 +42,11 @@ def init():
     import logging
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
+    
+    # КРИТИЧНО: проверяем что init() не вызывается повторно
+    if global_pipeline is not None:
+        logger.warning("⚠️ init() вызван повторно! Модель уже загружена, пропускаем")
+        return
 
     _ensure_env()
     _prepare_imports()
@@ -98,6 +103,13 @@ def init():
     if global_pipeline_config is None:
         raise RuntimeError("global_pipeline_config is None после load_models_once()")
     
+    # Логируем память ПОСЛЕ загрузки модели
+    import torch
+    if torch.cuda.is_available():
+        memory_after_init = torch.cuda.memory_allocated() / 1024**3
+        memory_reserved_after_init = torch.cuda.memory_reserved() / 1024**3
+        logger.info(f"🧠 Память ПОСЛЕ init(): allocated={memory_after_init:.2f}GB, reserved={memory_reserved_after_init:.2f}GB")
+    
     logger.info("✅ Инициализация завершена успешно")
 
 
@@ -146,13 +158,19 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
 
     data = event["input"] or {}
 
-    # Если по какой-то причине init не выполнился (или глобали пустые) — инициализируем тут
+    # Проверяем что модель загружена (init() должен был сработать при импорте модуля)
     global global_pipeline, global_pipeline_config
     if global_pipeline is None or global_pipeline_config is None:
-        logger.info(f"🔵 [{request_id}] Инициализация не выполнена, запускаем init()")
-        init()
+        logger.error(f"🔴 [{request_id}] Модель не загружена! init() должен был выполниться при импорте модуля")
+        return {"status": "ERROR", "error": "Model not loaded. Check init() function."}
     
     logger.info(f"🔵 [{request_id}] Параметры: {data.get('width')}x{data.get('height')}x{data.get('num_frames')}")
+    
+    # Логируем память ДО обработки
+    if torch.cuda.is_available():
+        memory_before = torch.cuda.memory_allocated() / 1024**3
+        memory_reserved_before = torch.cuda.memory_reserved() / 1024**3
+        logger.info(f"🧠 [{request_id}] Память ДО: allocated={memory_before:.2f}GB, reserved={memory_reserved_before:.2f}GB")
 
     prompt = data.get("prompt")
     if not prompt:
@@ -261,6 +279,13 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
             logger.info(f"🟡 [{request_id}] base64 размер: {len(video_base64) / 1024 / 1024:.2f}MB")
         except Exception as e:
             logger.error(f"🔴 [{request_id}] Ошибка кодирования base64: {e}")
+    
+    # Финальное логирование памяти
+    if torch.cuda.is_available():
+        memory_after = torch.cuda.memory_allocated() / 1024**3
+        memory_reserved_after = torch.cuda.memory_reserved() / 1024**3
+        logger.info(f"🧠 [{request_id}] Память ПОСЛЕ: allocated={memory_after:.2f}GB, reserved={memory_reserved_after:.2f}GB")
+        logger.info(f"🧠 [{request_id}] Изменение памяти: allocated={memory_after - memory_before:+.2f}GB, reserved={memory_reserved_after - memory_reserved_before:+.2f}GB")
     
     # Возвращаем путь, URL (если есть) и base64 (если нет URL)
     logger.info(f"✅ [{request_id}] Handler завершен успешно")
