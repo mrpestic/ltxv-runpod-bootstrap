@@ -208,6 +208,17 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
     except Exception:
         result_url = None
 
+    # Принудительная очистка GPU памяти ПЕРЕД загрузкой результата в base64
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            import gc
+            gc.collect()
+    except Exception:
+        pass
+    
     # Если S3 не настроен, возвращаем видео как base64
     video_base64 = None
     if result_url is None:
@@ -217,7 +228,7 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
                 video_base64 = base64.b64encode(video_bytes).decode('utf-8')
         except Exception as e:
             pass  # Если не получилось, просто вернем null
-
+    
     # Возвращаем путь, URL (если есть) и base64 (если нет URL)
     return {
         "status": "SUCCESS",

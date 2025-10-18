@@ -6,7 +6,7 @@ set -euo pipefail
 
 DOCKERHUB_USERNAME="${DOCKERHUB_USERNAME:-}"
 IMAGE_NAME="ltxv-runpod"
-TAG="${TAG:-latest}"
+TAG="${TAG:-v0.9.7}"
 
 if [ -z "$DOCKERHUB_USERNAME" ]; then
   echo "Ошибка: установите DOCKERHUB_USERNAME"
@@ -26,16 +26,20 @@ fi
 echo "🔐 Логин в Docker Hub..."
 docker login
 
-# Сборка
-echo "🔨 Сборка образа..."
-docker build \
+# Создаем buildx builder если нужно (для использования кеша)
+if ! docker buildx ls | grep -q multiarch; then
+  echo "📦 Создаем multi-platform builder..."
+  docker buildx create --name multiarch --driver docker-container --use
+fi
+docker buildx use multiarch
+
+# Сборка с buildx и сразу push (использует кеш, без --load)
+echo "🔨 Сборка образа с кешом и пуш..."
+docker buildx build \
   --platform linux/amd64 \
   -t "$DOCKERHUB_USERNAME/$IMAGE_NAME:$TAG" \
+  --push \
   .
-
-# Пуш
-echo "📤 Пуш образа в Docker Hub..."
-docker push "$DOCKERHUB_USERNAME/$IMAGE_NAME:$TAG"
 
 echo "✅ Готово! Образ: $DOCKERHUB_USERNAME/$IMAGE_NAME:$TAG"
 echo "📋 Используйте в RunPod: $DOCKERHUB_USERNAME/$IMAGE_NAME:$TAG"

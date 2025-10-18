@@ -37,21 +37,17 @@ RUN python3 -m venv /workspace/LTX-Video/env && \
     /workspace/LTX-Video/env/bin/python -m pip install git+https://github.com/huggingface/diffusers && \
     /workspace/LTX-Video/env/bin/python -m pip install huggingface_hub imageio imageio-ffmpeg av runpod
 
-# Кэш HF внутри workspace
-ENV HF_HOME=/workspace/.cache/huggingface \
-    HUGGINGFACE_HUB_CACHE=/workspace/.cache/huggingface \
-    TRANSFORMERS_CACHE=/workspace/.cache/huggingface \
-    DIFFUSERS_CACHE=/workspace/.cache/huggingface
+# Кэш HF будет в /runpod-volume (персистентный между воркерами)
+ENV HF_HOME=/runpod-volume/.cache/huggingface \
+    HUGGINGFACE_HUB_CACHE=/runpod-volume/.cache/huggingface \
+    TRANSFORMERS_CACHE=/runpod-volume/.cache/huggingface \
+    DIFFUSERS_CACHE=/runpod-volume/.cache/huggingface
 
-RUN mkdir -p $HF_HOME
-
-# Копируем скрипт загрузки весов (нужен для следующего шага)
+# Копируем скрипт загрузки весов (будет запускаться в entrypoint)
 COPY overlay/download_weights.py /workspace/LTX-Video/download_weights.py
 COPY overlay/ltxv-13b-0.9.8-distilled.yaml /workspace/LTX-Video/ltxv-13b-0.9.8-distilled.yaml
 
-# Загружаем веса модели на этапе сборки образа (для быстрого cold start)
-RUN cd /workspace/LTX-Video && \
-    /workspace/LTX-Video/env/bin/python download_weights.py
+# НЕ качаем веса при сборке! Качаем при запуске в /runpod-volume
 
 # Копируем overlay внутрь LTX-Video (в конце, чтобы не инвалидировать кеш для весов)
 COPY overlay/ /workspace/LTX-Video/
@@ -63,6 +59,9 @@ COPY rp_handler.py /workspace/rp_handler.py
 
 # По умолчанию RunPod Serverless использует python handler
 ENV PYTHONPATH=/workspace/LTX-Video
+
+# Фикс фрагментации CUDA памяти (важно для высоких разрешений)
+ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # Порты API/Frontend для Pod режима
 EXPOSE 8000 8002

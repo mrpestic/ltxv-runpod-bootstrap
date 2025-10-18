@@ -11,10 +11,11 @@ on:
       - 'overlay/**'
       - 'startup.sh'
       - 'entrypoint.sh'
+      - '.github/workflows/**'
 
 env:
   DOCKER_IMAGE: koder007/ltxv-runpod
-  TAG: v0.9.7
+  TAG: v1.0.0-cached  # Новая версия с кешированием весов
 
 jobs:
   build:
