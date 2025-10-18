@@ -124,6 +124,20 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
     - seed (int, optional)
     - image_base64 (str, optional) — для image-to-video
     """
+    import logging
+    import torch
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    
+    request_id = event.get("id", "unknown")
+    logger.info(f"🔵 [{request_id}] Handler started")
+    
+    # Логируем память ДО начала
+    if torch.cuda.is_available():
+        allocated = torch.cuda.memory_allocated() / 1024**3
+        cached = torch.cuda.memory_reserved() / 1024**3
+        logger.info(f"🔵 [{request_id}] GPU память ДО: {allocated:.2f}GB allocated, {cached:.2f}GB cached")
+    
     from ltx_video.inference import InferenceConfig
     from inference_daemon_official import infer_with_ready_pipeline
 
@@ -135,7 +149,10 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
     # Если по какой-то причине init не выполнился (или глобали пустые) — инициализируем тут
     global global_pipeline, global_pipeline_config
     if global_pipeline is None or global_pipeline_config is None:
+        logger.info(f"🔵 [{request_id}] Инициализация не выполнена, запускаем init()")
         init()
+    
+    logger.info(f"🔵 [{request_id}] Параметры: {data.get('width')}x{data.get('height')}x{data.get('num_frames')}")
 
     prompt = data.get("prompt")
     if not prompt:
@@ -175,9 +192,12 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
         config.conditioning_start_frames = [0]
 
     # Генерация через оптимизированную функцию демона с уже загруженным pipeline
+    logger.info(f"🟢 [{request_id}] Запускаем генерацию...")
     try:
         result_paths = infer_with_ready_pipeline(config, global_pipeline, global_pipeline_config)
+        logger.info(f"🟢 [{request_id}] Генерация завершена, результат: {result_paths}")
     except Exception as e:
+        logger.error(f"🔴 [{request_id}] Ошибка генерации: {e}", exc_info=True)
         # Уборка временного файла
         if tmp_image_path and os.path.exists(tmp_image_path):
             try:
@@ -208,28 +228,42 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
     except Exception:
         result_url = None
 
+    logger.info(f"🟡 [{request_id}] Начинаем обработку результата...")
+    
     # Принудительная очистка GPU памяти ПЕРЕД загрузкой результата в base64
     try:
         import torch
         if torch.cuda.is_available():
+            before_alloc = torch.cuda.memory_allocated() / 1024**3
+            before_cached = torch.cuda.memory_reserved() / 1024**3
+            logger.info(f"🟡 [{request_id}] GPU память ПЕРЕД очисткой: {before_alloc:.2f}GB allocated, {before_cached:.2f}GB cached")
+            
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
             import gc
             gc.collect()
-    except Exception:
-        pass
+            
+            after_alloc = torch.cuda.memory_allocated() / 1024**3
+            after_cached = torch.cuda.memory_reserved() / 1024**3
+            logger.info(f"🟡 [{request_id}] GPU память ПОСЛЕ очистки: {after_alloc:.2f}GB allocated, {after_cached:.2f}GB cached")
+            logger.info(f"🟡 [{request_id}] Освобождено: {before_alloc - after_alloc:.2f}GB allocated, {before_cached - after_cached:.2f}GB cached")
+    except Exception as e:
+        logger.error(f"🔴 [{request_id}] Ошибка очистки памяти: {e}")
     
     # Если S3 не настроен, возвращаем видео как base64
     video_base64 = None
     if result_url is None:
         try:
+            logger.info(f"🟡 [{request_id}] Кодируем видео в base64...")
             with open(result_paths[0], 'rb') as f:
                 video_bytes = f.read()
                 video_base64 = base64.b64encode(video_bytes).decode('utf-8')
+            logger.info(f"🟡 [{request_id}] base64 размер: {len(video_base64) / 1024 / 1024:.2f}MB")
         except Exception as e:
-            pass  # Если не получилось, просто вернем null
+            logger.error(f"🔴 [{request_id}] Ошибка кодирования base64: {e}")
     
     # Возвращаем путь, URL (если есть) и base64 (если нет URL)
+    logger.info(f"✅ [{request_id}] Handler завершен успешно")
     return {
         "status": "SUCCESS",
         "result_path": result_paths[0],
