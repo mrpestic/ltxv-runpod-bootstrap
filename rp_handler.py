@@ -158,11 +158,21 @@ def handler(event: Dict[str, Any]) -> Dict[str, Any]:
 
     data = event["input"] or {}
 
-    # Проверяем что модель загружена (init() должен был сработать при импорте модуля)
+    # Проверяем что модель загружена, если нет - вызываем init()
     global global_pipeline, global_pipeline_config
     if global_pipeline is None or global_pipeline_config is None:
-        logger.error(f"🔴 [{request_id}] Модель не загружена! init() должен был выполниться при импорте модуля")
-        return {"status": "ERROR", "error": "Model not loaded. Check init() function."}
+        logger.info(f"🔵 [{request_id}] Модель не загружена, вызываем init()...")
+        try:
+            init()
+            logger.info(f"✅ [{request_id}] init() завершен успешно")
+        except Exception as e:
+            logger.error(f"🔴 [{request_id}] Ошибка в init(): {e}")
+            return {"status": "ERROR", "error": f"Failed to initialize: {e}"}
+        
+        # Проверяем еще раз
+        if global_pipeline is None or global_pipeline_config is None:
+            logger.error(f"🔴 [{request_id}] Модель все еще не загружена после init()!")
+            return {"status": "ERROR", "error": "Model still not loaded after init()"}
     
     logger.info(f"🔵 [{request_id}] Параметры: {data.get('width')}x{data.get('height')}x{data.get('num_frames')}")
     
