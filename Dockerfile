@@ -1,5 +1,5 @@
 # Используем базовый образ с CUDA
-FROM nvidia/cuda:11.8-devel-ubuntu20.04
+FROM nvidia/cuda:11.8-runtime-ubuntu22.04
 
 # Устанавливаем системные зависимости
 RUN apt-get update && apt-get install -y \
@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     libxrender-dev \
     libglib2.0-0 \
     libgl1-mesa-glx \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Создаем символическую ссылку для python
