@@ -134,7 +134,7 @@ def generate_video_task(
         image = image.resize((width, height), Image.Resampling.LANCZOS)
         # Сжимаем картинку в видео (1 кадр)
         temp_video_path = f"temp_{uuid.uuid4().hex}.mp4"
-        export_to_video([image], temp_video_path, fps=30)
+        export_to_video([image], temp_video_path, fps=25)
         video_frames = load_video(temp_video_path)
         os.remove(temp_video_path)
         condition1 = LTXVideoCondition(video=video_frames, frame_index=0)
@@ -205,5 +205,5 @@ def generate_video_task(
 
     # Сохраняем видео
     output_path = f"result_{uuid.uuid4().hex}.mp4"
-    export_to_video(video, output_path, fps=30)
+    export_to_video(video, output_path, fps=25)
     return output_path

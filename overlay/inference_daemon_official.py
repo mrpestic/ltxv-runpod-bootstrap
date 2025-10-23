@@ -500,7 +500,7 @@ def process_command_file(command_file):
             num_frames=command['num_frames'],
             seed=command['seed'],
             pipeline_config="ltxv-13b-0.9.8-distilled.yaml",
-            frame_rate=24  # Устанавливаем 24 FPS как стандарт для видео
+            frame_rate=25  # Устанавливаем 25 FPS как стандарт для видео
         )
         
         # Добавляем изображение если есть

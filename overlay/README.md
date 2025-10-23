@@ -35,7 +35,7 @@ This is the official repository for LTX-Video.
 # Introduction
 
 LTX-Video is the first DiT-based video generation model that can generate high-quality videos in *real-time*.
-It can generate 30 FPS videos at 1216×704 resolution, faster than it takes to watch them.
+It can generate 25 FPS videos at 1216×704 resolution, faster than it takes to watch them.
 The model is trained on a large-scale dataset of diverse videos and can generate high-resolution videos
 with realistic and diverse content.
 
@@ -107,7 +107,7 @@ The model supports image-to-video, keyframe-based animation, video extension (bo
     * Does not require classifier-free guidance and spatio-temporal guidance.
     * Supports sampling with 8 (recommended), or less diffusion steps.
 - Improved prompt adherence, motion quality and fine details.
-- New default resolution and FPS: 1216 × 704 pixels at 30 FPS
+- New default resolution and FPS: 1216 × 704 pixels at 25 FPS
     * Still real time on H100 with the distilled model.
     * Other resolutions and FPS are still supported.
 - Support stochastic inference (can improve visual quality when using the distilled model)
