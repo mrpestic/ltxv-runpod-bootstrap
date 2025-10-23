@@ -26,4 +26,4 @@ fi
 # Запускаем RunPod handler
 echo "🚀 Запускаем RunPod serverless handler..."
 cd /workspace
-python rp_handler.py
+/workspace/LTX-Video/env/bin/python rp_handler.py
