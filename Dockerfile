@@ -1,73 +1,68 @@
 # Используем базовый образ с CUDA
-FROM nvidia/cuda:11.8-runtime-ubuntu22.04
+FROM nvidia/cuda:12.2.0-runtime-ubuntu22.04
 
-# Устанавливаем системные зависимости
-RUN apt-get update && apt-get install -y \
-    python3.11 \
-    python3.11-dev \
-    python3-pip \
-    git \
-    wget \
-    curl \
-    ffmpeg \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libglib2.0-0 \
-    libgl1-mesa-glx \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# Создаем символическую ссылку для python
-RUN ln -s /usr/bin/python3.11 /usr/bin/python
-
-# Устанавливаем рабочую директорию
 WORKDIR /workspace
 
-# Клонируем LTX-Video репозиторий
-RUN git clone https://github.com/Lightricks/LTX-Video.git
+# Базовые пакеты
+RUN apt-get update -y && \
+    apt-get install -y --no-install-recommends \
+      git \
+      python3 \
+      python3-venv \
+      python3-pip \
+      ffmpeg \
+      curl \
+      ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# Переходим в директорию LTX-Video
-WORKDIR /workspace/LTX-Video
+# Клонируем LTX-Video
+RUN git clone --depth 1 --branch main https://github.com/Lightricks/LTX-Video.git /workspace/LTX-Video
 
-# Устанавливаем Python зависимости
-RUN python -m pip install --upgrade pip
-RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-RUN pip install -r requirements.txt
+# Создаем venv и ставим зависимости
+RUN python3 -m venv /workspace/LTX-Video/env && \
+    . /workspace/LTX-Video/env/bin/activate && \
+    /workspace/LTX-Video/env/bin/python -m pip install --upgrade pip && \
+    /workspace/LTX-Video/env/bin/python -m pip install --extra-index-url https://download.pytorch.org/whl/cu121 torch torchvision torchaudio && \
+    /workspace/LTX-Video/env/bin/python -m pip install -e '/workspace/LTX-Video[inference-script]' && \
+    /workspace/LTX-Video/env/bin/python -m pip install fastapi[all] celery redis && \
+    /workspace/LTX-Video/env/bin/python -m pip install git+https://github.com/huggingface/diffusers && \
+    /workspace/LTX-Video/env/bin/python -m pip install huggingface_hub imageio imageio-ffmpeg av runpod
 
-# Устанавливаем дополнительные зависимости для RunPod
-RUN pip install runpod fastapi uvicorn
-
-# Создаем директории для кеша и моделей
-RUN mkdir -p /runpod-volume/.cache/huggingface
-RUN mkdir -p /runpod-volume/models
-
-# Настраиваем переменные окружения для кеширования
+# Кэш HF будет в /runpod-volume (персистентный между воркерами)
 ENV HF_HOME=/runpod-volume/.cache/huggingface \
     HUGGINGFACE_HUB_CACHE=/runpod-volume/.cache/huggingface \
     TRANSFORMERS_CACHE=/runpod-volume/.cache/huggingface \
     DIFFUSERS_CACHE=/runpod-volume/.cache/huggingface
 
-# Копируем необходимые файлы для скачивания весов
+# Копируем скрипт загрузки весов (будет запускаться в entrypoint)
 COPY overlay/download_weights.py /workspace/LTX-Video/download_weights.py
 COPY overlay/ltxv-13b-0.9.8-distilled.yaml /workspace/LTX-Video/ltxv-13b-0.9.8-distilled.yaml
 
-# Копируем overlay файлы
-COPY overlay/ /workspace/LTX-Video/
+# НЕ качаем веса при сборке! Качаем при запуске в /runpod-volume
 
-# Копируем startup.sh и entrypoint.sh
+# Копируем overlay внутрь LTX-Video (в конце, чтобы не инвалидировать кеш для весов)
+COPY overlay/ /workspace/LTX-Video/
 COPY startup.sh /workspace/startup.sh
 COPY entrypoint.sh /workspace/entrypoint.sh
 
-# Копируем rp_handler.py
+# Копируем handler для RunPod Serverless (в самом конце)
 COPY rp_handler.py /workspace/rp_handler.py
 
-# Настраиваем переменные окружения для PyTorch
+# По умолчанию RunPod Serverless использует python handler
+ENV PYTHONPATH=/workspace/LTX-Video
+
+# Фикс фрагментации CUDA памяти (важно для высоких разрешений)
 ENV PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
-# Устанавливаем права на выполнение
-RUN chmod +x /workspace/startup.sh
-RUN chmod +x /workspace/entrypoint.sh
+# Порты API/Frontend для Pod режима
+EXPOSE 8000 8002
 
-# Устанавливаем точку входа
-ENTRYPOINT ["/workspace/entrypoint.sh"]
+# Контейнер ничего не запускает сам в serverless, стартует через runpod.serverless
+RUN chmod +x /workspace/startup.sh /workspace/entrypoint.sh
+
+ENV RUN_MODE=serverless
+CMD ["/workspace/entrypoint.sh"]

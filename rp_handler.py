@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 # Добавляем путь к LTX-Video
 sys.path.append('/workspace/LTX-Video')
 
+# Активируем виртуальное окружение
+import subprocess
+import os
+os.environ['PATH'] = '/workspace/LTX-Video/env/bin:' + os.environ['PATH']
+
 # Глобальные переменные для pipeline
 global_pipeline = None
 global_pipeline_config = None
@@ -37,7 +42,7 @@ def init():
             logger.info("📥 Веса не найдены, скачиваем...")
             import subprocess
             result = subprocess.run([
-                "python", "/workspace/LTX-Video/download_weights.py"
+                "/workspace/LTX-Video/env/bin/python", "/workspace/LTX-Video/download_weights.py"
             ], cwd="/workspace/LTX-Video", capture_output=True, text=True)
             
             if result.returncode != 0:
