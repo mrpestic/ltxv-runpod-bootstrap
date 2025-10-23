@@ -1,5 +1,5 @@
 # Используем базовый образ с CUDA
-FROM nvidia/cuda:12.1-devel-ubuntu22.04
+FROM nvidia/cuda:11.8-devel-ubuntu20.04
 
 # Устанавливаем системные зависимости
 RUN apt-get update && apt-get install -y \
@@ -31,7 +31,7 @@ WORKDIR /workspace/LTX-Video
 
 # Устанавливаем Python зависимости
 RUN python -m pip install --upgrade pip
-RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 RUN pip install -r requirements.txt
 
 # Устанавливаем дополнительные зависимости для RunPod
