@@ -55,13 +55,14 @@ def init():
             logger.info("✅ Веса успешно скачаны")
         
         # Импортируем необходимые модули
-        from inference_daemon_official import load_pipeline_from_config
+        from inference_daemon_official import load_pipeline_config, create_ltx_video_pipeline
         
         # Загружаем pipeline
         config_path = "/workspace/LTX-Video/ltxv-13b-0.9.8-distilled.yaml"
         logger.info(f"📁 Загружаем конфиг из: {config_path}")
         
-        global_pipeline, global_pipeline_config = load_pipeline_from_config(config_path)
+        global_pipeline_config = load_pipeline_config("ltxv-13b-0.9.8-distilled.yaml")
+        global_pipeline = create_ltx_video_pipeline(global_pipeline_config)
         
         logger.info("✅ Модель успешно загружена!")
         
