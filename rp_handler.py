@@ -68,7 +68,20 @@ def init():
             os.chdir("/workspace/LTX-Video")
             
             global_pipeline_config = load_pipeline_config("ltxv-13b-0.9.8-distilled.yaml")
-            global_pipeline = create_ltx_video_pipeline(global_pipeline_config)
+            
+            # Создаем pipeline с нужными параметрами
+            global_pipeline = create_ltx_video_pipeline(
+                ckpt_path=global_pipeline_config["checkpoint_path"],
+                precision=global_pipeline_config["precision"],
+                text_encoder_model_name_or_path=global_pipeline_config["text_encoder_model_name_or_path"],
+                enhance_prompt=True,
+                prompt_enhancer_image_caption_model_name_or_path=global_pipeline_config.get(
+                    "prompt_enhancer_image_caption_model_name_or_path"
+                ),
+                prompt_enhancer_llm_model_name_or_path=global_pipeline_config.get(
+                    "prompt_enhancer_llm_model_name_or_path"
+                ),
+            )
             
         finally:
             # Возвращаемся в исходную директорию
